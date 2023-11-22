@@ -61,7 +61,7 @@ func main() {
 
 	// Erstelle das Fenster im Vollbildmodus mit angepasster Größe
 	ebiten.SetFullscreen(true)
-	ebiten.SetWindowTitle("Bild im Vollbildmodus")
+	ebiten.SetWindowTitle("Definitiv kein Bluescreen")
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 
 	// Definiere das Spiel
