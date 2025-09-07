@@ -2,7 +2,7 @@ module bluescreen
 
 go 1.20
 
-require github.com/hajimehoshi/ebiten v1.12.12
+require github.com/hajimehoshi/ebiten v1.12.13
 
 require (
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b // indirect
