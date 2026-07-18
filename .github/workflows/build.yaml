@@ -1,0 +1,112 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+          - name: windows-amd64
+            os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
+          - name: darwin-amd64
+            os: macos-13
+            goos: darwin
+            goarch: amd64
+            ext: ""
+          - name: darwin-arm64
+            os: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Ebiten braucht auf Linux X11/GL Header (CGO)
+      - name: Install Linux deps
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev \
+            libxi-dev libxxf86vm-dev pkg-config
+
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        shell: bash
+        run: |
+          mkdir -p dist/bluescreen-${{ matrix.name }}
+          # -H windowsgui unterdrückt das Konsolenfenster unter Windows
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            LDFLAGS="-s -w -H windowsgui"
+          else
+            LDFLAGS="-s -w"
+          fi
+          go build -v -trimpath -ldflags "$LDFLAGS" \
+            -o "dist/bluescreen-${{ matrix.name }}/bluescreen${{ matrix.ext }}" .
+          # Bilder sind via go:embed in der Binary -> nur Doku beilegen
+          cp README.md LICENSE "dist/bluescreen-${{ matrix.name }}/" || true
+
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            7z a "bluescreen-${{ matrix.name }}.zip" "bluescreen-${{ matrix.name }}"
+          else
+            tar -czf "bluescreen-${{ matrix.name }}.tar.gz" "bluescreen-${{ matrix.name }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bluescreen-${{ matrix.name }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+          generate_release_notes: true
